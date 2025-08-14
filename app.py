@@ -1292,34 +1292,45 @@ if "messages" not in st.session_state:
 
 # Load query engine and LLM
 if "query_engine" not in st.session_state:
-    with st.spinner("🕉️ Loading Ayurvedic Knowledge"):
-        @st.cache_resource
-        def load_embedding_model():
-            return FastEmbedEmbedding(
-                model_name="BAAI/bge-small-en-v1.5",
-                embed_batch_size=32,
-                cache_dir="./embedding_cache"
+    try:
+        with st.spinner("🕉️ Loading Ayurvedic Knowledge"):
+            @st.cache_resource
+            def load_embedding_model():
+                return FastEmbedEmbedding(
+                    model_name="BAAI/bge-small-en-v1.5",
+                    embed_batch_size=32,
+                    cache_dir="./embedding_cache"
+                )
+            Settings.embed_model = load_embedding_model()
+
+            # Check if faiss_db exists
+            if not os.path.exists("faiss_db"):
+                st.error("❌ FAISS database not found. Please ensure faiss_db directory is uploaded to your repository.")
+                st.stop()
+
+            vector_store = FaissVectorStore.from_persist_dir("faiss_db")
+            storage_context = StorageContext.from_defaults(
+                vector_store=vector_store,
+                persist_dir="faiss_db"
             )
-        Settings.embed_model = load_embedding_model()
 
-        vector_store = FaissVectorStore.from_persist_dir("faiss_db")
-        storage_context = StorageContext.from_defaults(
-            vector_store=vector_store,
-            persist_dir="faiss_db"
-        )
+            index = load_index_from_storage(
+                storage_context=storage_context,
+                index_id="2a3e044a-5744-41d0-9873-8d679b1571a8"
+            )
 
-        index = load_index_from_storage(
-            storage_context=storage_context,
-            index_id="2a3e044a-5744-41d0-9873-8d679b1571a8"
-        )
+            api_key = get_groq_api_key()
+            if not api_key:
+                st.error("❌ Please set your GROQ_API_KEY in Streamlit Cloud secrets")
+                st.info("Go to your app settings → Secrets → Add: GROQ_API_KEY = your_api_key")
+                st.stop()
 
-        api_key = get_groq_api_key()
-        if not api_key:
-            st.error("Please set your GROQ_API_KEY in the .env file or as an environment variable")
-            st.stop()
-
-        llm = Groq(model="llama-3.1-8b-instant", api_key=api_key)
-        st.session_state.llm = llm
+            llm = Groq(model="llama-3.1-8b-instant", api_key=api_key)
+            st.session_state.llm = llm
+    except Exception as e:
+        st.error(f"❌ Error loading application: {str(e)}")
+        st.info("This might be due to missing files or configuration. Check the error above.")
+        st.stop()
 
         ayurveda_prompt_str = """
 Role: You are an expert Ayurvedic physician and educator.
