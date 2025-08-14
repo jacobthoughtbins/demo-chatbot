@@ -5,10 +5,12 @@ A WhatsApp-style chatbot interface built with Streamlit that provides Ayurvedic 
 ## Features
 
 - 🌿 WhatsApp-style chat interface
-- 🧠 AI-powered responses using Groq's Llama model
+- 🧠 AI-powered responses using Groq's Llama 3.3 70B model
 - 📚 Knowledge base powered by FAISS vector store
 - 🔍 FastEmbed embeddings for semantic search
 - 🎨 Beautiful, responsive UI with custom CSS
+- 💬 Persistent chat history with session management
+- 🗑️ Delete individual chats or clear all history
 
 ## Setup Instructions
 
@@ -21,8 +23,8 @@ A WhatsApp-style chatbot interface built with Streamlit that provides Ayurvedic 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/jacobthoughtbins/demo-chatbot.git
-   cd demo-chatbot
+   git clone https://github.com/yourusername/ayurvedic-health-assistant.git
+   cd ayurvedic-health-assistant
    ```
 
 2. **Create a virtual environment:**
@@ -39,7 +41,7 @@ A WhatsApp-style chatbot interface built with Streamlit that provides Ayurvedic 
 4. **Set up environment variables:**
    Create a `.env` file in the root directory and add your Groq API key:
    ```
-   Groq_api_key=your_groq_api_key_here
+   GROQ_API_KEY=your_groq_api_key_here
    ```
 
 5. **Run the application:**
@@ -50,9 +52,10 @@ A WhatsApp-style chatbot interface built with Streamlit that provides Ayurvedic 
 ## Project Structure
 
 ```
-demo-chatbot/
+ayurvedic-health-assistant/
 ├── app.py                 # Main Streamlit application
 ├── requirements.txt       # Python dependencies
+├── README.md             # Project documentation
 ├── .env                  # Environment variables (not in repo)
 ├── .gitignore           # Git ignore file
 ├── faiss_db/            # FAISS vector database
@@ -61,8 +64,10 @@ demo-chatbot/
 │   ├── graph_store.json
 │   ├── image__vector_store.json
 │   └── index_store.json
-└── embedding_cache/     # Cached embedding models
-    └── models--qdrant--bge-small-en-v1.5-onnx-q/
+├── embedding_cache/     # Cached embedding models
+│   └── models--qdrant--bge-small-en-v1.5-onnx-q/
+├── chat_store.json      # Persistent chat history
+└── chat_sessions.json   # Chat session metadata
 ```
 
 ## Dependencies

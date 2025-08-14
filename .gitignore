@@ -37,7 +37,6 @@ venv.bak/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb
 
 # IDE
 .vscode/
@@ -69,7 +68,13 @@ tmp/
 data/
 *.csv
 *.xlsx
-*.json
+
+# Chat history files (user-specific)
+chat_store.json
+chat_sessions.json
+
+# Jupyter notebooks (development files)
+*.ipynb
 
 # Old requirements file
 require.txt
