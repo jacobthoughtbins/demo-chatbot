@@ -784,7 +784,7 @@ st.markdown("""
             pointer-events: auto !important;
         }
 
-        /* Mobile hamburger menu button */
+        /* Mobile hamburger menu button - always visible on mobile */
         .mobile-menu-btn {
             position: fixed !important;
             top: 16px !important;
@@ -799,11 +799,17 @@ st.markdown("""
             cursor: pointer !important;
             display: block !important;
             transition: all 0.2s ease !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
         }
 
         .mobile-menu-btn:hover {
             background: #2d2d2d !important;
             border-color: #565869 !important;
+        }
+
+        /* Ensure mobile menu button is always visible when sidebar is closed */
+        .mobile-menu-btn.sidebar-closed {
+            display: block !important;
         }
 
         /* Adjust main content for mobile */
@@ -924,6 +930,29 @@ st.markdown("""
         .mobile-menu-btn {
             display: none !important;
         }
+
+        /* Desktop sidebar toggle button when sidebar is collapsed */
+        .desktop-menu-btn {
+            position: fixed !important;
+            top: 16px !important;
+            left: 16px !important;
+            z-index: 1001 !important;
+            background: #171717 !important;
+            border: 1px solid #4d4d4f !important;
+            color: #ececf1 !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            font-size: 18px !important;
+            cursor: pointer !important;
+            display: none !important;
+            transition: all 0.2s ease !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+
+        .desktop-menu-btn:hover {
+            background: #2d2d2d !important;
+            border-color: #565869 !important;
+        }
     }
 </style>
 
@@ -973,7 +1002,7 @@ startObserving();
 
 // Mobile menu functionality
 function createMobileMenuButton() {
-    // Check if we're on mobile
+    // Always create button for mobile devices (including tablets)
     if (window.innerWidth <= 768) {
         // Remove existing button if any
         const existingBtn = document.querySelector('.mobile-menu-btn');
@@ -986,12 +1015,37 @@ function createMobileMenuButton() {
         menuBtn.className = 'mobile-menu-btn';
         menuBtn.innerHTML = '☰';
         menuBtn.setAttribute('aria-label', 'Toggle menu');
+        menuBtn.title = 'Toggle sidebar';
 
         // Add click handler
         menuBtn.addEventListener('click', toggleMobileSidebar);
 
         // Add to body
         document.body.appendChild(menuBtn);
+
+        // Ensure button is visible
+        updateMobileButtonVisibility();
+    }
+}
+
+// Update mobile button visibility based on sidebar state
+function updateMobileButtonVisibility() {
+    const menuBtn = document.querySelector('.mobile-menu-btn');
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+
+    if (menuBtn && window.innerWidth <= 768) {
+        const sidebarVisible = sidebar && sidebar.getAttribute('aria-expanded') === 'true';
+
+        if (sidebarVisible) {
+            menuBtn.innerHTML = '✕';
+            menuBtn.style.left = '276px'; // Move button when sidebar is open
+        } else {
+            menuBtn.innerHTML = '☰';
+            menuBtn.style.left = '16px'; // Reset position when sidebar is closed
+        }
+
+        // Always keep button visible on mobile
+        menuBtn.style.display = 'block';
     }
 }
 
@@ -1006,13 +1060,14 @@ function toggleMobileSidebar() {
             // Hide sidebar
             sidebar.setAttribute('aria-expanded', 'false');
             sidebar.style.left = '-260px';
-            if (menuBtn) menuBtn.innerHTML = '☰';
         } else {
             // Show sidebar
             sidebar.setAttribute('aria-expanded', 'true');
             sidebar.style.left = '0px';
-            if (menuBtn) menuBtn.innerHTML = '✕';
         }
+
+        // Update button appearance and position
+        updateMobileButtonVisibility();
     }
 }
 
@@ -1037,7 +1092,7 @@ function handleResize() {
         // Desktop mode - ensure sidebar is visible and remove mobile button
         if (sidebar) {
             sidebar.style.left = '0px';
-            sidebar.setAttribute('aria-expanded', 'false');
+            sidebar.setAttribute('aria-expanded', 'true');
         }
         if (menuBtn) {
             menuBtn.remove();
@@ -1046,11 +1101,69 @@ function handleResize() {
         // Mobile mode - create button if it doesn't exist
         if (!menuBtn) {
             createMobileMenuButton();
+        } else {
+            // Update existing button
+            updateMobileButtonVisibility();
         }
         // Ensure sidebar is hidden initially on mobile
-        if (sidebar && sidebar.getAttribute('aria-expanded') !== 'true') {
+        if (sidebar && sidebar.getAttribute('aria-expanded') !== 'false') {
             sidebar.style.left = '-260px';
+            sidebar.setAttribute('aria-expanded', 'false');
+            updateMobileButtonVisibility();
         }
+    }
+}
+
+// Desktop menu functionality for collapsed sidebar
+function createDesktopMenuButton() {
+    // Remove existing button if any
+    const existingBtn = document.querySelector('.desktop-menu-btn');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
+
+    // Create desktop menu button
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'desktop-menu-btn';
+    menuBtn.innerHTML = '☰';
+    menuBtn.setAttribute('aria-label', 'Show sidebar');
+    menuBtn.title = 'Show sidebar';
+
+    // Add click handler
+    menuBtn.addEventListener('click', function() {
+        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+        if (sidebar) {
+            sidebar.style.display = 'block';
+            sidebar.style.left = '0px';
+            menuBtn.style.display = 'none';
+        }
+    });
+
+    // Add to body
+    document.body.appendChild(menuBtn);
+}
+
+// Check if sidebar is collapsed on desktop and show/hide menu button
+function updateDesktopMenuButton() {
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    const menuBtn = document.querySelector('.desktop-menu-btn');
+
+    if (window.innerWidth > 768) {
+        const sidebarHidden = sidebar && (sidebar.style.display === 'none' ||
+                                        sidebar.offsetWidth === 0 ||
+                                        sidebar.style.left === '-260px');
+
+        if (sidebarHidden) {
+            if (!menuBtn) {
+                createDesktopMenuButton();
+            } else {
+                menuBtn.style.display = 'block';
+            }
+        } else if (menuBtn) {
+            menuBtn.style.display = 'none';
+        }
+    } else if (menuBtn) {
+        menuBtn.style.display = 'none';
     }
 }
 
@@ -1064,6 +1177,9 @@ function initMobile() {
 
     // Initial setup
     handleResize();
+
+    // Check for desktop menu button periodically
+    setInterval(updateDesktopMenuButton, 1000);
 }
 
 // Initialize when DOM is ready
