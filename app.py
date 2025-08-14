@@ -785,7 +785,7 @@ st.markdown("""
         }
 
         /* Mobile hamburger menu button - always visible on mobile */
-        .mobile-menu-btn {
+        .mobile-menu-btn, .desktop-menu-btn {
             position: fixed !important;
             top: 16px !important;
             left: 16px !important;
@@ -800,16 +800,19 @@ st.markdown("""
             display: block !important;
             transition: all 0.2s ease !important;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+            font-family: monospace !important;
         }
 
-        .mobile-menu-btn:hover {
+        .mobile-menu-btn:hover, .desktop-menu-btn:hover {
             background: #2d2d2d !important;
             border-color: #565869 !important;
         }
 
-        /* Ensure mobile menu button is always visible when sidebar is closed */
-        .mobile-menu-btn.sidebar-closed {
+        /* Force visibility when needed */
+        .mobile-menu-btn.force-visible, .desktop-menu-btn.force-visible {
             display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
 
         /* Adjust main content for mobile */
@@ -1033,27 +1036,51 @@ function updateMobileButtonVisibility() {
     const menuBtn = document.querySelector('.mobile-menu-btn');
     const sidebar = document.querySelector('section[data-testid="stSidebar"]');
 
-    if (menuBtn && window.innerWidth <= 768) {
-        const sidebarVisible = sidebar && sidebar.getAttribute('aria-expanded') === 'true';
+    if (window.innerWidth <= 768) {
+        if (!menuBtn) {
+            createMobileMenuButton();
+            return;
+        }
+
+        const sidebarVisible = sidebar && (
+            sidebar.getAttribute('aria-expanded') === 'true' ||
+            sidebar.offsetWidth > 50 ||
+            sidebar.style.display !== 'none'
+        );
 
         if (sidebarVisible) {
             menuBtn.innerHTML = '✕';
             menuBtn.style.left = '276px'; // Move button when sidebar is open
+            menuBtn.title = 'Close sidebar';
         } else {
             menuBtn.innerHTML = '☰';
             menuBtn.style.left = '16px'; // Reset position when sidebar is closed
+            menuBtn.title = 'Open sidebar';
         }
 
-        // Always keep button visible on mobile
+        // Force visibility
         menuBtn.style.display = 'block';
+        menuBtn.style.opacity = '1';
+        menuBtn.style.visibility = 'visible';
+        menuBtn.classList.add('force-visible');
     }
 }
 
 function toggleMobileSidebar() {
     const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    const toggleBtn = sidebar ? sidebar.querySelector('button[kind="header"]') : null;
     const menuBtn = document.querySelector('.mobile-menu-btn');
 
-    if (sidebar) {
+    if (toggleBtn) {
+        // Use Streamlit's native toggle button
+        toggleBtn.click();
+
+        // Wait a bit then update our button
+        setTimeout(() => {
+            updateMobileButtonVisibility();
+        }, 100);
+    } else if (sidebar) {
+        // Fallback: manual toggle
         const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
 
         if (isExpanded) {
@@ -1132,11 +1159,17 @@ function createDesktopMenuButton() {
     // Add click handler
     menuBtn.addEventListener('click', function() {
         const sidebar = document.querySelector('section[data-testid="stSidebar"]');
-        if (sidebar) {
+        const toggleBtn = sidebar ? sidebar.querySelector('button[kind="header"]') : null;
+
+        if (toggleBtn) {
+            // Click the native Streamlit toggle button
+            toggleBtn.click();
+        } else if (sidebar) {
+            // Fallback: manually show sidebar
             sidebar.style.display = 'block';
             sidebar.style.left = '0px';
-            menuBtn.style.display = 'none';
         }
+        menuBtn.style.display = 'none';
     });
 
     // Add to body
@@ -1169,6 +1202,7 @@ function updateDesktopMenuButton() {
 
 // Initialize mobile functionality
 function initMobile() {
+    console.log('Initializing mobile functionality...');
     createMobileMenuButton();
 
     // Add event listeners
@@ -1180,6 +1214,93 @@ function initMobile() {
 
     // Check for desktop menu button periodically
     setInterval(updateDesktopMenuButton, 1000);
+
+    // Force check for sidebar state every 2 seconds (for Streamlit Cloud)
+    setInterval(function() {
+        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+        const menuBtn = document.querySelector('.mobile-menu-btn');
+        const desktopBtn = document.querySelector('.desktop-menu-btn');
+
+        if (sidebar) {
+            const sidebarVisible = sidebar.offsetWidth > 0 && sidebar.style.display !== 'none';
+            const isCollapsed = sidebar.querySelector('button[kind="header"]') &&
+                              sidebar.querySelector('button[kind="header"]').getAttribute('aria-expanded') === 'false';
+
+            console.log('Sidebar check:', {
+                visible: sidebarVisible,
+                collapsed: isCollapsed,
+                width: sidebar.offsetWidth,
+                display: sidebar.style.display,
+                isMobile: window.innerWidth <= 768
+            });
+
+            if (window.innerWidth <= 768) {
+                // Mobile mode
+                if (!sidebarVisible || isCollapsed) {
+                    if (!menuBtn) {
+                        console.log('Creating mobile menu button...');
+                        createMobileMenuButton();
+                    } else {
+                        menuBtn.style.display = 'block';
+                    }
+                }
+            } else {
+                // Desktop mode
+                if (!sidebarVisible || isCollapsed) {
+                    if (!desktopBtn) {
+                        console.log('Creating desktop menu button...');
+                        createDesktopMenuButton();
+                    } else {
+                        desktopBtn.style.display = 'block';
+                    }
+                }
+            }
+        }
+    }, 2000);
+}
+
+// Immediate fallback - create menu button right away for mobile
+if (window.innerWidth <= 768) {
+    const quickBtn = document.createElement('button');
+    quickBtn.className = 'mobile-menu-btn force-visible';
+    quickBtn.innerHTML = '☰';
+    quickBtn.title = 'Toggle sidebar';
+    quickBtn.style.cssText = `
+        position: fixed !important;
+        top: 16px !important;
+        left: 16px !important;
+        z-index: 1001 !important;
+        background: #171717 !important;
+        border: 1px solid #4d4d4f !important;
+        color: #ececf1 !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        font-size: 18px !important;
+        cursor: pointer !important;
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        font-family: monospace !important;
+    `;
+    quickBtn.addEventListener('click', function() {
+        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+        if (sidebar) {
+            const isHidden = sidebar.offsetWidth < 50 || sidebar.style.display === 'none';
+            if (isHidden) {
+                sidebar.style.display = 'block';
+                sidebar.style.left = '0px';
+                sidebar.setAttribute('aria-expanded', 'true');
+                quickBtn.innerHTML = '✕';
+                quickBtn.style.left = '276px';
+            } else {
+                sidebar.style.left = '-260px';
+                sidebar.setAttribute('aria-expanded', 'false');
+                quickBtn.innerHTML = '☰';
+                quickBtn.style.left = '16px';
+            }
+        }
+    });
+    document.body.appendChild(quickBtn);
 }
 
 // Initialize when DOM is ready
