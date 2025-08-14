@@ -24,7 +24,7 @@ st.set_page_config(
     page_title="Ayurvedic Health Assistant",
     page_icon="🕉️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"  # Auto-collapse on mobile
 )
 
 # ChatGPT-style CSS with delete functionality
@@ -53,6 +53,58 @@ st.markdown("""
     .stToolbar {display: none !important;}
     .stDecoration {display: none !important;}
     .stActionButton {display: none !important;}
+
+    /* Hide Streamlit header and reduce top spacing */
+    .stAppHeader {display: none !important;}
+    .stAppViewContainer > .main > div {padding-top: 0 !important;}
+    .stAppViewContainer {padding-top: 0 !important;}
+
+    /* Remove any top margins and padding from Streamlit containers */
+    .stAppViewContainer .main .block-container {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    /* Force remove any remaining top spacing */
+    .stApp > div:first-child {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    /* Hide any potential Streamlit headers or spacing divs */
+    .stApp > div > div:first-child:empty {
+        display: none !important;
+    }
+
+    /* Remove spacing from main content wrapper */
+    .main .block-container > div:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Aggressive removal of all possible top spacing */
+    .stApp, .stApp > div, .stApp > div > div {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Target the main content area specifically */
+    .main, .main > div, .main .element-container:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Remove any gap between elements */
+    .element-container:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Force the chat container to start at the very top */
+    .stMarkdown:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
 
     /* Remove any default Streamlit spacing */
     .element-container {
@@ -261,19 +313,23 @@ st.markdown("""
         align-items: center !important;
         justify-content: flex-start !important;
         background: var(--peach-bg) !important;
-        position: relative !important; /* let Streamlit layout handle sidebar width */
+        position: absolute !important; /* Position absolutely to eliminate any spacing */
+        top: 0 !important; /* Start at the very top */
+        left: 0 !important;
+        right: 0 !important;
         min-height: 100vh !important;
-        padding: 20px !important;
+        padding: 0 10px 10px 10px !important; /* Zero top padding */
         box-sizing: border-box !important;
         overflow: hidden !important;
+        margin: 0 !important;
     }
 
     /* Chat box - Centered container */
     .chat-box {
         width: 100% !important;
         max-width: 800px !important;
-        height: calc(100vh - 40px) !important; /* viewport height minus container padding */
-        max-height: calc(100vh - 40px) !important;
+        height: calc(100vh - 10px) !important; /* viewport height minus bottom padding only */
+        max-height: calc(100vh - 10px) !important;
         background: var(--peach-bg-2) !important;
         border-radius: 12px !important;
         border: 1px solid var(--peach-border) !important;
@@ -282,6 +338,7 @@ st.markdown("""
         overflow: hidden !important;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
         min-height: 0 !important; /* allow children to size */
+        margin-top: 0 !important;
     }
 
     /* Chat messages area - Scrollable inside container */
@@ -467,7 +524,7 @@ st.markdown("""
     }
 
     .welcome-title {
-        color: #ececf1 !important;
+        color: #065f46 !important;
         font-size: 32px !important;
         font-weight: 600 !important;
         margin-bottom: 16px !important;
@@ -476,7 +533,7 @@ st.markdown("""
     }
 
     .welcome-subtitle {
-        color: #8e8ea0 !important;
+        color: #19c37d !important;
         font-size: 16px !important;
         margin-bottom: 32px !important;
         max-width: 600px !important;
@@ -685,6 +742,189 @@ st.markdown("""
     .messages-container::-webkit-scrollbar-thumb:hover {
         background: #6b6c7b !important;
     }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+        /* Mobile sidebar - initially hidden, overlay when shown */
+        section[data-testid="stSidebar"] {
+            position: fixed !important;
+            top: 0 !important;
+            left: -260px !important; /* Hidden by default */
+            width: 260px !important;
+            height: 100vh !important;
+            z-index: 1000 !important;
+            transition: left 0.3s ease !important;
+            background: #171717 !important;
+            border-right: 1px solid #2d2d2d !important;
+        }
+
+        /* Show sidebar when expanded */
+        section[data-testid="stSidebar"][data-testid="stSidebar"][aria-expanded="true"] {
+            left: 0 !important;
+        }
+
+        /* Mobile sidebar overlay */
+        section[data-testid="stSidebar"]::before {
+            content: '' !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 260px !important;
+            width: calc(100vw - 260px) !important;
+            height: 100vh !important;
+            background: rgba(0, 0, 0, 0.5) !important;
+            z-index: -1 !important;
+            opacity: 0 !important;
+            transition: opacity 0.3s ease !important;
+            pointer-events: none !important;
+        }
+
+        /* Show overlay when sidebar is expanded */
+        section[data-testid="stSidebar"][aria-expanded="true"]::before {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        /* Mobile hamburger menu button */
+        .mobile-menu-btn {
+            position: fixed !important;
+            top: 16px !important;
+            left: 16px !important;
+            z-index: 1001 !important;
+            background: #171717 !important;
+            border: 1px solid #4d4d4f !important;
+            color: #ececf1 !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            font-size: 18px !important;
+            cursor: pointer !important;
+            display: block !important;
+            transition: all 0.2s ease !important;
+        }
+
+        .mobile-menu-btn:hover {
+            background: #2d2d2d !important;
+            border-color: #565869 !important;
+        }
+
+        /* Adjust main content for mobile */
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+
+        /* Mobile chat container adjustments */
+        .chat-container {
+            padding: 45px 5px 5px 5px !important; /* Top padding for menu button */
+            width: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+        }
+
+        .chat-box {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: calc(100vh - 50px) !important; /* Account for mobile padding */
+            border-radius: 8px !important;
+            margin: 0 !important;
+        }
+
+        /* Mobile input adjustments */
+        .chat-input-wrapper {
+            padding: 0 12px !important;
+        }
+
+        /* Mobile message adjustments */
+        .messages-container {
+            padding: 12px !important;
+        }
+
+        .message-wrapper {
+            margin-bottom: 12px !important;
+            gap: 8px !important;
+        }
+
+        .message-avatar {
+            width: 28px !important;
+            height: 28px !important;
+            font-size: 14px !important;
+        }
+
+        .message-text {
+            font-size: 14px !important;
+            padding: 10px 12px !important;
+        }
+
+        /* Mobile welcome message */
+        .welcome-container {
+            padding: 20px 16px !important;
+        }
+
+        .welcome-title {
+            font-size: 24px !important;
+        }
+
+        .welcome-subtitle {
+            font-size: 14px !important;
+        }
+
+        /* Mobile chat input */
+        .stChatInputContainer textarea {
+            font-size: 16px !important; /* Prevent zoom on iOS */
+            padding: 12px 40px 12px 12px !important;
+        }
+
+        /* Mobile sidebar content adjustments */
+        section[data-testid="stSidebar"] > div {
+            padding: 16px 12px !important;
+        }
+
+        .new-chat-btn {
+            padding: 10px 12px !important;
+            font-size: 13px !important;
+        }
+
+        .chat-history-item {
+            padding: 10px 32px 10px 12px !important;
+            font-size: 13px !important;
+        }
+
+        .delete-btn {
+            width: 20px !important;
+            height: 20px !important;
+            font-size: 10px !important;
+            right: 6px !important;
+        }
+    }
+
+    /* Tablet adjustments */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        section[data-testid="stSidebar"] {
+            width: 240px !important;
+        }
+
+        .chat-container {
+            padding: 16px !important;
+        }
+
+        .chat-box {
+            max-width: 90% !important;
+        }
+    }
+
+    /* Desktop - ensure sidebar is always visible */
+    @media (min-width: 1025px) {
+        section[data-testid="stSidebar"] {
+            position: relative !important;
+            left: 0 !important;
+            width: 260px !important;
+        }
+
+        .mobile-menu-btn {
+            display: none !important;
+        }
+    }
 </style>
 
 <script>
@@ -730,6 +970,136 @@ function startObserving() {
 }
 
 startObserving();
+
+// Mobile menu functionality
+function createMobileMenuButton() {
+    // Check if we're on mobile
+    if (window.innerWidth <= 768) {
+        // Remove existing button if any
+        const existingBtn = document.querySelector('.mobile-menu-btn');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+
+        // Create mobile menu button
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'mobile-menu-btn';
+        menuBtn.innerHTML = '☰';
+        menuBtn.setAttribute('aria-label', 'Toggle menu');
+
+        // Add click handler
+        menuBtn.addEventListener('click', toggleMobileSidebar);
+
+        // Add to body
+        document.body.appendChild(menuBtn);
+    }
+}
+
+function toggleMobileSidebar() {
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    const menuBtn = document.querySelector('.mobile-menu-btn');
+
+    if (sidebar) {
+        const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+            // Hide sidebar
+            sidebar.setAttribute('aria-expanded', 'false');
+            sidebar.style.left = '-260px';
+            if (menuBtn) menuBtn.innerHTML = '☰';
+        } else {
+            // Show sidebar
+            sidebar.setAttribute('aria-expanded', 'true');
+            sidebar.style.left = '0px';
+            if (menuBtn) menuBtn.innerHTML = '✕';
+        }
+    }
+}
+
+// Close sidebar when clicking overlay
+function handleOverlayClick(event) {
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
+        // Check if click is outside sidebar
+        const rect = sidebar.getBoundingClientRect();
+        if (event.clientX > rect.right) {
+            toggleMobileSidebar();
+        }
+    }
+}
+
+// Handle window resize
+function handleResize() {
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    const menuBtn = document.querySelector('.mobile-menu-btn');
+
+    if (window.innerWidth > 768) {
+        // Desktop mode - ensure sidebar is visible and remove mobile button
+        if (sidebar) {
+            sidebar.style.left = '0px';
+            sidebar.setAttribute('aria-expanded', 'false');
+        }
+        if (menuBtn) {
+            menuBtn.remove();
+        }
+    } else {
+        // Mobile mode - create button if it doesn't exist
+        if (!menuBtn) {
+            createMobileMenuButton();
+        }
+        // Ensure sidebar is hidden initially on mobile
+        if (sidebar && sidebar.getAttribute('aria-expanded') !== 'true') {
+            sidebar.style.left = '-260px';
+        }
+    }
+}
+
+// Initialize mobile functionality
+function initMobile() {
+    createMobileMenuButton();
+
+    // Add event listeners
+    document.addEventListener('click', handleOverlayClick);
+    window.addEventListener('resize', handleResize);
+
+    // Initial setup
+    handleResize();
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobile);
+} else {
+    initMobile();
+}
+
+// Re-initialize when Streamlit updates the page
+const mobileObserver = new MutationObserver(function(mutations) {
+    let shouldReinit = false;
+    mutations.forEach(function(mutation) {
+        if (mutation.type === 'childList') {
+            // Check if sidebar was added/modified
+            for (let node of mutation.addedNodes) {
+                if (node.nodeType === 1 &&
+                    (node.querySelector && node.querySelector('section[data-testid="stSidebar"]') ||
+                     node.getAttribute && node.getAttribute('data-testid') === 'stSidebar')) {
+                    shouldReinit = true;
+                    break;
+                }
+            }
+        }
+    });
+
+    if (shouldReinit) {
+        setTimeout(initMobile, 100);
+    }
+});
+
+// Start observing for Streamlit updates
+mobileObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+});
 </script>
 """, unsafe_allow_html=True)
 
@@ -948,7 +1318,7 @@ if "query_engine" not in st.session_state:
             st.error("Please set your GROQ_API_KEY in the .env file or as an environment variable")
             st.stop()
 
-        llm = Groq(model="llama-3.3-70b-versatile", api_key=api_key)
+        llm = Groq(model="llama-3.1-8b-instant", api_key=api_key)
         st.session_state.llm = llm
 
         ayurveda_prompt_str = """
@@ -1199,37 +1569,8 @@ def get_greeting_response(query):
     else:
         return " I'm here to help! Ask me about Ayurvedic medicine, natural remedies, diet, or wellness practices."
 
-def is_follow_up_question(query):
-    if not query:
-        return False
-
-    query_lower = query.lower().strip()
-
-    # Direct follow-up phrases
-    follow_up_words = ['elaborate', 'more about this', 'explain more', 'tell me more',
-                       'what else', 'continue', 'go on', 'expand on that', 'more details',
-                       'can you explain', 'what about', 'how about', 'also tell me',
-                       'anything else', 'more information']
-
-    # Question words that often indicate follow-ups
-    follow_up_questions = ['what other', 'what are some', 'are there any', 'can you suggest',
-                          'do you have', 'what would you recommend', 'how can i', 'should i']
-
-    # Check for direct follow-up phrases
-    for phrase in follow_up_words:
-        if phrase in query_lower:
-            return True
-
-    # Check for follow-up question patterns
-    for question in follow_up_questions:
-        if query_lower.startswith(question):
-            return True
-
-    # Check if it's a short question (likely a follow-up)
-    if len(query.split()) <= 3 and any(word in query_lower for word in ['what', 'how', 'why', 'when', 'where']):
-        return True
-
-    return False
+# Note: Removed is_follow_up_question function as we now ALWAYS include conversation context
+# This ensures the bot remembers everything from previous conversation regardless of question type
 
 # Simple delete confirmation in sidebar
 if st.session_state.delete_confirmation:
@@ -1441,25 +1782,74 @@ if True:  # Always show main interface
             try:
                 if is_greeting_or_chat(prompt):
                     response = get_greeting_response(prompt)
-                elif is_follow_up_question(prompt) and len(st.session_state.messages) > 1:
-                    # For follow-up questions, include recent context
-                    recent_context = ""
-                    if len(st.session_state.messages) >= 3:
-                        # Get last few exchanges for context
-                        last_user_msg = st.session_state.messages[-3]['content'] if st.session_state.messages[-3]['role'] == 'user' else ""
-                        last_assistant_msg = st.session_state.messages[-2]['content'] if st.session_state.messages[-2]['role'] == 'assistant' else ""
-
-                        recent_context = f"Previous conversation context:\nUser asked: {last_user_msg}\nI responded: {last_assistant_msg}\n\nNow the user is asking: {prompt}\n\nPlease provide a helpful follow-up response that builds on our previous discussion."
-                    else:
-                        recent_context = f"This is a follow-up to our conversation. User is now asking: {prompt}"
-
-                    response = str(st.session_state.query_engine.query(recent_context))
                 else:
-                    # For regular health questions, provide context about this being part of a conversation
-                    if len(st.session_state.messages) > 1:
-                        conversation_context = f"We are having a conversation about health and Ayurveda. The user is now asking: {prompt}\n\nPlease provide a helpful, conversational response."
-                        response = str(st.session_state.query_engine.query(conversation_context))
+                    # Check if this is a memory recall question
+                    memory_keywords = ["what did you mention", "what remedies did you", "what herbs did you",
+                                     "what lifestyle", "what diet", "what treatments", "you mentioned",
+                                     "you said", "you recommended", "you suggested", "from our conversation"]
+
+                    is_memory_question = any(keyword in prompt.lower() for keyword in memory_keywords)
+
+                    if len(st.session_state.messages) > 1 and is_memory_question:
+                        # For memory questions, use ONLY conversation history (no vector DB)
+                        chat_history = st.session_state.memory.get()
+
+                        if chat_history:
+                            # Build conversation context from ChatMemoryBuffer
+                            context_parts = []
+                            for msg in chat_history:
+                                if msg.role == 'user':
+                                    context_parts.append(f"User: {msg.content}")
+                                else:
+                                    context_parts.append(f"Assistant: {msg.content}")
+
+                            conversation_history = "\n\n".join(context_parts)
+
+                            # Direct response from conversation only - no vector DB
+                            memory_query = f"""Based ONLY on this conversation history, answer the user's question:
+
+CONVERSATION HISTORY:
+{conversation_history}
+
+USER QUESTION: {prompt}
+
+IMPORTANT: Only reference information that appears in the conversation history above. Do not add any additional information from external knowledge. Extract and summarize only what was actually discussed."""
+
+                            # Use the LLM directly without vector database
+                            from llama_index.core.llms import ChatMessage as LLMChatMessage
+                            memory_response = st.session_state.llm.chat([LLMChatMessage(role="user", content=memory_query)])
+                            response = str(memory_response.message.content)
+                        else:
+                            response = "I don't have any previous conversation to reference."
+
+                    elif len(st.session_state.messages) > 1:
+                        # For new questions, include conversation context with vector DB
+                        chat_history = st.session_state.memory.get()
+
+                        if chat_history:
+                            # Build conversation context from ChatMemoryBuffer
+                            context_parts = []
+                            for msg in chat_history:
+                                if msg.role == 'user':
+                                    context_parts.append(f"User previously asked: {msg.content}")
+                                else:
+                                    context_parts.append(f"I previously responded: {msg.content}")
+
+                            conversation_history = "\n\n".join(context_parts)
+
+                            # Create a query that includes conversation context
+                            enhanced_query = f"""CONVERSATION CONTEXT:
+{conversation_history}
+
+CURRENT USER QUESTION: {prompt}
+
+Please provide a helpful response considering our conversation history."""
+
+                            response = str(st.session_state.query_engine.query(enhanced_query))
+                        else:
+                            response = str(st.session_state.query_engine.query(prompt))
                     else:
+                        # First message in conversation
                         response = str(st.session_state.query_engine.query(prompt))
 
                 # Add assistant response
