@@ -1,0 +1,9 @@
+streamlit
+python-dotenv
+llama-index>=0.10.0
+llama-index-embeddings-fastembed
+llama-index-llms-groq
+llama-index-vector-stores-faiss
+faiss-cpu
+pypdf
+python-docx
