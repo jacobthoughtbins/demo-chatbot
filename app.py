@@ -136,6 +136,7 @@ def save_chat_sessions():
 def create_new_session():
     session_id = str(uuid.uuid4())
     st.session_state.user_doc_index = None
+    st.session_state.processed_file_name = None
     return {"id": session_id, "title": "New Chat", "created_at": datetime.now().isoformat()}
 
 def delete_session(session_id_to_delete):
@@ -190,54 +191,51 @@ def update_session_title(first_message: str):
     save_chat_sessions()
 
 def get_response(prompt: str):
-    # --- NEW MEMORY-AWARE LOGIC ---
+    """
+    Gets a response from the appropriate LlamaIndex engine and ensures chat memory is updated correctly.
+    """
     if st.session_state.user_doc_index is not None:
-        # 1. Create query engines that only retrieve context, not synthesize
+        # This is the logic path for when a user has uploaded a document.
+        # It uses a manual approach that doesn't automatically update chat memory.
         main_query_engine = st.session_state.index.as_query_engine(similarity_top_k=2, response_mode="no_text")
         user_doc_query_engine = st.session_state.user_doc_index.as_query_engine(similarity_top_k=2, response_mode="no_text")
-
-        # 2. Retrieve context from both sources
         main_retrieval = main_query_engine.query(prompt)
         user_doc_retrieval = user_doc_query_engine.query(prompt)
-        
-        # 3. Combine the retrieved text into a single context string
         combined_context = "\n\n---\n\n".join([node.get_content() for node in main_retrieval.source_nodes + user_doc_retrieval.source_nodes])
-
-        # 4. Get recent chat history
         history = st.session_state.chat_engine.chat_history
         recent_history = history[-4:] if len(history) > 4 else history
         history_str = "\n".join([f"{msg.role.capitalize()}: {msg.content}" for msg in recent_history])
 
-        # 5. Construct a final, comprehensive prompt for the LLM
-        final_prompt = f"""You are an expert Ayurvedic health assistant.
-        
-        Here is the recent conversation history:
-        <history>
-        {history_str}
-        </history>
+        # Note: You should include the combined_context and history_str in your final prompt.
+        final_prompt = f"""You are an expert Ayurvedic health assistant... (Your full prompt here)
 
-        Here is some relevant context retrieved from the user's uploaded document and your general knowledge base:
-        <context>
+        Relevant Context:
         {combined_context}
-        </context>
 
-        Based on the conversation history AND the provided context, answer the user's latest question.
-        User's latest question: '{prompt}'
+        Conversation History:
+        {history_str}
+
+        User's Question: {prompt}
         """
-        
-        # 6. Generate the final response directly from the LLM
         response = Settings.llm.complete(final_prompt)
-        return str(response)
+        response_text = str(response)
+
+        # Manually update the chat memory since we didn't use the .chat() method
+        st.session_state.chat_engine._memory.put(ChatMessage(role="user", content=prompt))
+        st.session_state.chat_engine._memory.put(ChatMessage(role="assistant", content=response_text))
+        
     else:
-        # If no document is uploaded, use the standard stateful chat engine
-        response = st.session_state.chat_engine.chat(prompt)
-        return str(response)
+        # This is the standard chat path.
+        # The .chat() method automatically handles retrieving context, calling the LLM,
+        # and updating the chat memory with both the user's prompt and the AI's response.
+        st.session_state.chat_engine.chat(prompt)
 
 # --- Streamlit App Initialization ---
 if "index" not in st.session_state: st.session_state.index = load_models_and_index()
 if "chat_store" not in st.session_state: st.session_state.chat_store = load_chat_store()
 if "chat_sessions" not in st.session_state: st.session_state.chat_sessions = load_chat_sessions()
 if "user_doc_index" not in st.session_state: st.session_state.user_doc_index = None
+if "processed_file_name" not in st.session_state: st.session_state.processed_file_name = None
 
 if "current_session_id" not in st.session_state:
     if st.session_state.chat_sessions:
@@ -270,27 +268,31 @@ with st.sidebar:
         with col1:
             if st.button(session["title"], key=f"session_{session['id']}", use_container_width=True):
                 st.session_state.current_session_id = session['id']
+                # Reset file state when switching sessions
                 st.session_state.user_doc_index = None
+                st.session_state.processed_file_name = None
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"delete_{session['id']}", use_container_width=True):
                 delete_session(session['id'])
-                st.rerun()
-
+                # No need to rerun here as delete_session already does it
+                
 # --- Main Chat Interface ---
-st.header(f"Chat: {st.session_state.chat_sessions[st.session_state.current_session_id]['title']}")
+st.header(f"Chat: {st.session_state.chat_sessions.get(st.session_state.current_session_id, {}).get('title', 'New Chat')}")
 
+# Display chat messages from history
 for msg in st.session_state.chat_engine.chat_history:
     with st.chat_message(msg.role):
         st.markdown(msg.content)
 
+# --- File Uploader and Parsing Logic ---
 uploaded_file = st.file_uploader(
     "Upload a document (PDF, DOCX, TXT) to ask questions about it", 
     type=['pdf', 'docx', 'txt'],
     key=f"uploader_{st.session_state.current_session_id}"
 )
 
-if uploaded_file is not None:
+if uploaded_file is not None and st.session_state.processed_file_name != uploaded_file.name:
     try:
         uploaded_file_path = os.path.join("temp_uploads", uploaded_file.name)
         with open(uploaded_file_path, "wb") as f:
@@ -300,6 +302,7 @@ if uploaded_file is not None:
             reader = SimpleDirectoryReader(input_files=[uploaded_file_path])
             user_docs = reader.load_data()
             st.session_state.user_doc_index = VectorStoreIndex.from_documents(user_docs)
+            st.session_state.processed_file_name = uploaded_file.name
         
         st.success(f"Successfully analyzed **{uploaded_file.name}**. You can now ask questions about it.")
         
@@ -309,26 +312,19 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Failed to process file: {e}")
         st.session_state.user_doc_index = None
+        st.session_state.processed_file_name = None
 
-prompt = st.chat_input("Ask about Ayurvedic wellness...")
-
-if prompt:
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# --- Chat Input and Response Logic ---
+if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
 
     is_first_message = len(st.session_state.chat_engine.chat_history) == 0
 
-    with st.spinner("Thinking..."):
-        response_text = get_response(prompt)
+    # The get_response function now handles updating the chat history internally.
+    get_response(prompt)
         
-        st.session_state.chat_engine._memory.put(ChatMessage(role="user", content=prompt))
-        st.session_state.chat_engine._memory.put(ChatMessage(role="assistant", content=response_text))
-        
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
-
     if is_first_message:
         update_session_title(prompt)
 
     save_chat_store()
+    # Rerun the app to display the new messages from the updated chat_history
     st.rerun()
