@@ -175,9 +175,13 @@ def load_models_and_index():
     return index
 
 def initialize_chat_engine(session_id: str):
-    system_prompt = """You are an expert Ayurvedic health assistant... (Your full prompt here)"""
-    memory = ChatMemoryBuffer.from_defaults(token_limit=15000, chat_store=st.session_state.chat_store, chat_store_key=session_id)
-    return ContextChatEngine.from_defaults(retriever=st.session_state.index.as_retriever(similarity_top_k=5), memory=memory, system_prompt=system_prompt, llm=Settings.llm)
+    system_prompt = """You are an expert Ayurvedic health assistant. Your knowledge is based on traditional Ayurvedic principles. 
+    - Provide clear, helpful, and direct answers.
+    - Be friendly and conversational.
+    - **IMPORTANT**: Structure your answers clearly using markdown. Use headings (like '## Dietary Remedies') and bullet points to organize information and make it easy to read.
+    - Do not mention the source of your information unless specifically asked."""
+    memory = ChatMemoryBuffer.from_defaults(token_limit=8000, chat_store=st.session_state.chat_store, chat_store_key=session_id)
+    return ContextChatEngine.from_defaults(retriever=st.session_state.index.as_retriever(similarity_top_k=2), memory=memory, system_prompt=system_prompt, llm=Settings.llm)
 
 def update_session_title(first_message: str):
     if len(first_message) < 50:
@@ -190,13 +194,11 @@ def update_session_title(first_message: str):
     st.session_state.chat_sessions[st.session_state.current_session_id]['title'] = title
     save_chat_sessions()
 
-def get_response(prompt: str):
+def get_response_generator(prompt: str):
     """
-    Gets a response from the appropriate LlamaIndex engine and ensures chat memory is updated correctly.
+    Gets a streaming response from the appropriate LlamaIndex engine.
     """
     if st.session_state.user_doc_index is not None:
-        # This is the logic path for when a user has uploaded a document.
-        # It uses a manual approach that doesn't automatically update chat memory.
         main_query_engine = st.session_state.index.as_query_engine(similarity_top_k=2, response_mode="no_text")
         user_doc_query_engine = st.session_state.user_doc_index.as_query_engine(similarity_top_k=2, response_mode="no_text")
         main_retrieval = main_query_engine.query(prompt)
@@ -206,8 +208,7 @@ def get_response(prompt: str):
         recent_history = history[-4:] if len(history) > 4 else history
         history_str = "\n".join([f"{msg.role.capitalize()}: {msg.content}" for msg in recent_history])
 
-        # Note: You should include the combined_context and history_str in your final prompt.
-        final_prompt = f"""You are an expert Ayurvedic health assistant... (Your full prompt here)
+        final_prompt = f"""You are an expert Ayurvedic health assistant... (Your full prompt here, including instructions to synthesize)
 
         Relevant Context:
         {combined_context}
@@ -217,18 +218,10 @@ def get_response(prompt: str):
 
         User's Question: {prompt}
         """
-        response = Settings.llm.complete(final_prompt)
-        response_text = str(response)
-
-        # Manually update the chat memory since we didn't use the .chat() method
-        st.session_state.chat_engine._memory.put(ChatMessage(role="user", content=prompt))
-        st.session_state.chat_engine._memory.put(ChatMessage(role="assistant", content=response_text))
-        
+        return Settings.llm.stream_complete(final_prompt)
     else:
-        # This is the standard chat path.
-        # The .chat() method automatically handles retrieving context, calling the LLM,
-        # and updating the chat memory with both the user's prompt and the AI's response.
-        st.session_state.chat_engine.chat(prompt)
+        streaming_response = st.session_state.chat_engine.stream_chat(prompt)
+        return streaming_response.response_gen
 
 # --- Streamlit App Initialization ---
 if "index" not in st.session_state: st.session_state.index = load_models_and_index()
@@ -268,15 +261,14 @@ with st.sidebar:
         with col1:
             if st.button(session["title"], key=f"session_{session['id']}", use_container_width=True):
                 st.session_state.current_session_id = session['id']
-                # Reset file state when switching sessions
                 st.session_state.user_doc_index = None
                 st.session_state.processed_file_name = None
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"delete_{session['id']}", use_container_width=True):
                 delete_session(session['id'])
-                # No need to rerun here as delete_session already does it
-                
+                st.rerun()
+
 # --- Main Chat Interface ---
 st.header(f"Chat: {st.session_state.chat_sessions.get(st.session_state.current_session_id, {}).get('title', 'New Chat')}")
 
@@ -314,17 +306,24 @@ if uploaded_file is not None and st.session_state.processed_file_name != uploade
         st.session_state.user_doc_index = None
         st.session_state.processed_file_name = None
 
-# --- Chat Input and Response Logic ---
+# --- Chat Input and Response Logic (CORRECTED) ---
 if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
+    # Check if this is the first message *before* the engine processes it
     is_first_message = len(st.session_state.chat_engine.chat_history) == 0
 
-    # The get_response function now handles updating the chat history internally.
-    get_response(prompt)
-        
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            response_generator = get_response_generator(prompt)
+            # The `stream_chat` method automatically handles memory.
+            # We just need to display the streamed response.
+            st.write_stream(response_generator)
+
+
     if is_first_message:
         update_session_title(prompt)
 
+    # The chat store is now correctly updated by the engine, so we just save it.
     save_chat_store()
-    # Rerun the app to display the new messages from the updated chat_history
-    st.rerun()
