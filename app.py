@@ -25,6 +25,8 @@ st.set_page_config(
     layout="wide",
 )
 
+
+
 def load_css():
     """Loads custom CSS for styling the Streamlit app."""
     st.markdown("""
@@ -35,28 +37,44 @@ def load_css():
             color: #E0E0E0;
         }
 
-        /* --- (other styles remain the same) --- */
+        /* --- (Your other styles for sidebar, buttons, etc. remain here) --- */
 
-        /* Chat Message Bubbles - STABLE VERSION */
+        /* Chat Input Styling */
+        .st-emotion-cache-13k62yr {
+            background-color: #1E1E1E;
+            border-top: 1px solid #333;
+        }
+        .st-emotion-cache-13k62yr textarea {
+            background-color: #2C2C2C;
+            color: #E0E0E0;
+            border: 1px solid #444;
+        }
+
+        /* --- STABLE CHAT BUBBLE STYLING --- */
+
+        /* Remove default padding from the main chat message container */
         .stChatMessage {
+            padding: 0;
+        }
+
+        /* Target the inner div for the USER message using its stable data-testid */
+        div[data-testid="stChatMessageContent-user"] {
+            background-color: #264653;
             border-radius: 12px;
             padding: 1rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1rem; /* Add margin for spacing between bubbles */
         }
 
-        /* Target the user message bubble using a stable attribute */
-        .stChatMessage:has([data-testid="stChatMessageContent-user"]) {
-            background-color: #264653;
-        }
-
-        /* Target the assistant message bubble using a stable attribute */
-        .stChatMessage:has([data-testid="stChatMessageContent-assistant"]) {
+        /* Target the inner div for the ASSISTANT message using its stable data-testid */
+        div[data-testid="stChatMessageContent-assistant"] {
             background-color: #2A2A2A;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem; /* Add margin for spacing between bubbles */
         }
 
     </style>
     """, unsafe_allow_html=True)
-
 load_css()
 load_dotenv()
 
