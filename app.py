@@ -35,74 +35,24 @@ def load_css():
             color: #E0E0E0;
         }
 
-        /* Sidebar Styling */
-        .st-emotion-cache-16txtl3 {
-            background-color: #1E1E1E;
-            border-right: 1px solid #333;
-        }
-        .st-emotion-cache-16txtl3 h2 {
-            color: #4CAF50;
-        }
-        .st-emotion-cache-16txtl3 .stButton>button {
-            width: 100%;
-            border-radius: 8px;
-            background-color: #4CAF50;
-            color: #FFFFFF;
-            border: none;
-        }
-        .st-emotion-cache-16txtl3 .stButton>button:hover {
-            background-color: #45a049;
-        }
+        /* --- (other styles remain the same) --- */
 
-        /* Chat History Buttons & Delete Button */
-        .st-emotion-cache-1ja81wh { /* Div container for columns */
-            border-radius: 8px;
-            background-color: #2C2C2C;
-            margin-bottom: 8px;
-            transition: background-color 0.3s ease;
-        }
-        .st-emotion-cache-1ja81wh:hover {
-            background-color: #383838;
-        }
-        .st-emotion-cache-1ja81wh button {
-            background-color: transparent;
-            color: #E0E0E0;
-            border: none;
-            text-align: left;
-            width: 100%;
-        }
-        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq { /* Delete button column */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq button {
-            color: #aaa;
-            text-align: center;
-        }
-        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq button:hover {
-            color: #ff4b4b;
-        }
-
-        /* Chat Input Styling */
-        .st-emotion-cache-13k62yr {
-            background-color: #1E1E1E;
-            border-top: 1px solid #333;
-        }
-        .st-emotion-cache-13k62yr textarea {
-            background-color: #2C2C2C;
-            color: #E0E0E0;
-            border: 1px solid #444;
-        }
-
-        /* Chat Message Bubbles */
+        /* Chat Message Bubbles - STABLE VERSION */
         .stChatMessage {
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 1rem;
         }
-        .st-emotion-cache-4oy321 { background-color: #264653; } /* User message */
-        .st-emotion-cache-janbn0 { background-color: #2A2A2A; } /* Assistant message */
+
+        /* Target the user message bubble using a stable attribute */
+        .stChatMessage:has([data-testid="stChatMessageContent-user"]) {
+            background-color: #264653;
+        }
+
+        /* Target the assistant message bubble using a stable attribute */
+        .stChatMessage:has([data-testid="stChatMessageContent-assistant"]) {
+            background-color: #2A2A2A;
+        }
 
     </style>
     """, unsafe_allow_html=True)
