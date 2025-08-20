@@ -18,7 +18,7 @@ from llama_index.core.storage.chat_store import SimpleChatStore
 from llama_index.core.chat_engine import ContextChatEngine
 from llama_index.core.llms import ChatMessage
 
-# --- Page Configuration ---
+# --- Page Configuration & CSS ---
 st.set_page_config(
     page_title="Ayurvedic Health Assistant",
     page_icon="🌿",
@@ -35,27 +35,79 @@ def load_css():
             color: #E0E0E0;
         }
 
-        /* --- STABLE CHAT BUBBLE STYLING --- */
+        /* Sidebar Styling */
+        .st-emotion-cache-16txtl3 {
+            background-color: #1E1E1E;
+            border-right: 1px solid #333;
+        }
+        .st-emotion-cache-16txtl3 h2 {
+            color: #4CAF50;
+        }
+        .st-emotion-cache-16txtl3 .stButton>button {
+            width: 100%;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: #FFFFFF;
+            border: none;
+        }
+        .st-emotion-cache-16txtl3 .stButton>button:hover {
+            background-color: #45a049;
+        }
 
-        /* Target the inner div for the USER message using its stable data-testid */
-        div[data-testid="stChatMessageContent-user"] {
-            background-color: #264653 !important;
+        /* Chat History Buttons & Delete Button */
+        .st-emotion-cache-1ja81wh { /* Div container for columns */
+            border-radius: 8px;
+            background-color: #2C2C2C;
+            margin-bottom: 8px;
+            transition: background-color 0.3s ease;
+        }
+        .st-emotion-cache-1ja81wh:hover {
+            background-color: #383838;
+        }
+        .st-emotion-cache-1ja81wh button {
+            background-color: transparent;
+            color: #E0E0E0;
+            border: none;
+            text-align: left;
+            width: 100%;
+        }
+        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq { /* Delete button column */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq button {
+            color: #aaa;
+            text-align: center;
+        }
+        .st-emotion-cache-1ja81wh .st-emotion-cache-1kyxreq button:hover {
+            color: #ff4b4b;
+        }
+
+        /* Chat Input Styling */
+        .st-emotion-cache-13k62yr {
+            background-color: #1E1E1E;
+            border-top: 1px solid #333;
+        }
+        .st-emotion-cache-13k62yr textarea {
+            background-color: #2C2C2C;
+            color: #E0E0E0;
+            border: 1px solid #444;
+        }
+
+        /* Chat Message Bubbles */
+        .stChatMessage {
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 1rem;
         }
-
-        /* Target the inner div for the ASSISTANT message using its stable data-testid */
-        div[data-testid="stChatMessageContent-assistant"] {
-            background-color: #2A2A2A !important;
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
+        .st-emotion-cache-4oy321 { background-color: #264653; } /* User message */
+        .st-emotion-cache-janbn0 { background-color: #2A2A2A; } /* Assistant message */
 
     </style>
     """, unsafe_allow_html=True)
 
+load_css()
 load_dotenv()
 
 # Create a directory for temporary file uploads if it doesn't exist
@@ -232,17 +284,21 @@ def is_english(prompt: str) -> bool:
     A more robust check to see if the prompt contains characters
     from non-Latin scripts, allowing for common symbols and punctuation.
     """
+    # This regex checks for characters in common non-Latin scripts.
+    # It will return True (is English) if no such characters are found.
     return not bool(re.search(r'[\u0900-\u097F\u4E00-\u9FFF\uAC00-\uD7AF\u0400-\u04FF]', prompt))
 
 
 def classify_prompt(prompt: str) -> str:
     """
     Classifies the user's prompt into predefined categories for robust handling.
+    This now includes a GIBBERISH category for the LLM to detect.
     """
     greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "howdy"]
     if prompt.strip().lower() in greetings:
         return "GREETING"
         
+    # Use the LLM for more nuanced classification
     classification_prompt = f"""
     Classify the user's query into one of the following categories. Follow these rules strictly:
     1. If the query asks for personal details, opinions, or analysis about a specific named person (e.g., a celebrity, public figure), it is ALWAYS a 'PERSON_QUERY', regardless of other keywords.
@@ -262,6 +318,7 @@ def classify_prompt(prompt: str) -> str:
     Category:
     """
     response = Settings.llm.complete(classification_prompt)
+    # Clean up the response to get only the category name
     category = response.text.strip().upper()
     
     if "PERSON_QUERY" in category:
@@ -278,6 +335,7 @@ if "index" not in st.session_state: st.session_state.index = load_models_and_ind
 if "chat_store" not in st.session_state: st.session_state.chat_store = load_chat_store()
 if "chat_sessions" not in st.session_state: st.session_state.chat_sessions = load_chat_sessions()
 
+# Session-specific state initialization
 if "user_doc_index" not in st.session_state: st.session_state.user_doc_index = None
 if "processed_file_names" not in st.session_state: st.session_state.processed_file_names = []
 
@@ -312,6 +370,7 @@ with st.sidebar:
         with col1:
             if st.button(session["title"], key=f"session_{session['id']}", use_container_width=True):
                 st.session_state.current_session_id = session['id']
+                # Reset document state when switching sessions
                 st.session_state.user_doc_index = None
                 st.session_state.processed_file_names = []
                 st.rerun()
@@ -322,10 +381,6 @@ with st.sidebar:
 
 # --- UI Rendering: Main Chat Interface ---
 st.header(f"Chat: {st.session_state.chat_sessions.get(st.session_state.current_session_id, {}).get('title', 'New Chat')}")
-
-# ✅ MOVED CSS INJECTION HERE
-# This ensures styles are loaded just before the chat messages are displayed.
-load_css()
 
 # Display chat messages from history
 for msg in st.session_state.chat_engine.chat_history:
@@ -341,9 +396,10 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
+    # Check if the uploaded files are new for this session
     new_file_names = [f.name for f in uploaded_files]
     if set(new_file_names) != set(st.session_state.processed_file_names):
-        st.session_state.processed_file_names = []
+        st.session_state.processed_file_names = [] # Reset list for reprocessing
         file_paths = []
         all_docs = []
         
@@ -355,21 +411,26 @@ if uploaded_files:
                         f.write(uploaded_file.getbuffer())
                     file_paths.append(file_path)
                     
+                    # Load data from the single file
                     reader = SimpleDirectoryReader(input_files=[file_path])
                     user_docs = reader.load_data()
                     all_docs.extend(user_docs)
                     st.session_state.processed_file_names.append(uploaded_file.name)
 
                 except Exception as e:
+                    # More user-friendly error for corrupted files
                     st.error(f"Sorry, the file '{uploaded_file.name}' seems to be corrupted or unreadable. Please try a different file. Error: {e}")
+                    # Clean up the problematic file
                     if os.path.exists(file_path):
                         os.remove(file_path)
-                    continue
+                    continue # Move to the next file
 
             if all_docs:
+                # Create a single index from all successfully loaded documents
                 st.session_state.user_doc_index = VectorStoreIndex.from_documents(all_docs)
                 st.success(f"Successfully analyzed **{', '.join(st.session_state.processed_file_names)}**. You can now ask questions about them.")
             
+            # Clean up all temporary files
             for path in file_paths:
                 if os.path.exists(path):
                     os.remove(path)
@@ -381,6 +442,7 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
     
     is_first_message = len(st.session_state.chat_engine.chat_history) == 0
 
+    # --- Multi-stage Guardrail Check ---
     if not is_english(prompt):
         response_text = "I am currently able to converse only in English. Please ask your question in English."
         with st.chat_message("assistant"):
@@ -390,31 +452,43 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
     else:
         prompt_category = classify_prompt(prompt)
         
-        if prompt_category in ["GIBBERISH", "PERSON_QUERY", "OFF_TOPIC"]:
-            if prompt_category == "GIBBERISH":
-                response_text = "I'm sorry, I didn't understand your question. Could you please rephrase it?"
-            elif prompt_category == "PERSON_QUERY":
-                response_text = "As an Ayurvedic health assistant, my expertise is focused on wellness and natural health. I cannot answer questions about specific people. How can I help you with your health today?"
-            else: # OFF_TOPIC
-                response_text = "I am an Ayurvedic health assistant and my knowledge is focused on that area. I can't answer questions on topics like politics, celebrities, or general trivia. How can I help you with your wellness today?"
-            
+        if prompt_category == "GIBBERISH":
+            response_text = "I'm sorry, I didn't understand your question. Could you please rephrase it?"
+            with st.chat_message("assistant"):
+                st.markdown(response_text)
+            st.session_state.chat_engine.chat_history.append(ChatMessage(role="user", content=prompt))
+            st.session_state.chat_engine.chat_history.append(ChatMessage(role="assistant", content=response_text))
+        
+        elif prompt_category == "PERSON_QUERY":
+            response_text = "As an Ayurvedic health assistant, my expertise is focused on wellness and natural health. I cannot answer questions about specific people. How can I help you with your health today?"
             with st.chat_message("assistant"):
                 st.markdown(response_text)
             st.session_state.chat_engine.chat_history.append(ChatMessage(role="user", content=prompt))
             st.session_state.chat_engine.chat_history.append(ChatMessage(role="assistant", content=response_text))
 
+        elif prompt_category == "OFF_TOPIC":
+            response_text = "I am an Ayurvedic health assistant and my knowledge is focused on that area. I can't answer questions on topics like politics, celebrities, or general trivia. How can I help you with your wellness today?"
+            with st.chat_message("assistant"):
+                st.markdown(response_text)
+            st.session_state.chat_engine.chat_history.append(ChatMessage(role="user", content=prompt))
+            st.session_state.chat_history.append(ChatMessage(role="assistant", content=response_text))
+
         else: # This handles GREETING and AYURVEDA_QUERY
+            # --- CORE RESPONSE LOGIC ---
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     response_generator = get_response_generator(prompt)
                     full_response = st.write_stream(response_generator)
+
 
             if st.session_state.user_doc_index is not None:
                 st.session_state.chat_engine.chat_history.append(
                     ChatMessage(role="assistant", content=full_response)
                 )
 
+    # Update title on the first message, regardless of category.
     if is_first_message:
         update_session_title(prompt)
 
+    # Save chat store after every interaction
     save_chat_store()
