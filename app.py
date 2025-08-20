@@ -264,7 +264,7 @@ def get_response_generator(prompt: str):
         # Manually add user message to history for context in the next turn
         st.session_state.chat_engine.chat_history.append(ChatMessage(role="user", content=prompt))
         
-        # CORRECTED: Wrapper to extract text from raw stream chunks
+        # Wrapper to extract text from raw stream chunks
         def text_stream_wrapper(raw_stream):
             for chunk in raw_stream:
                 yield chunk.delta
@@ -418,7 +418,7 @@ if uploaded_files:
                     st.session_state.processed_file_names.append(uploaded_file.name)
 
                 except Exception as e:
-                    # IMPROVED: More user-friendly error for corrupted files
+                    # More user-friendly error for corrupted files
                     st.error(f"Sorry, the file '{uploaded_file.name}' seems to be corrupted or unreadable. Please try a different file. Error: {e}")
                     # Clean up the problematic file
                     if os.path.exists(file_path):
@@ -440,7 +440,6 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # CORRECTED: Check if it's the first message right away.
     is_first_message = len(st.session_state.chat_engine.chat_history) == 0
 
     # --- Multi-stage Guardrail Check ---
@@ -472,7 +471,7 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
             with st.chat_message("assistant"):
                 st.markdown(response_text)
             st.session_state.chat_engine.chat_history.append(ChatMessage(role="user", content=prompt))
-            st.session_state.chat_engine.chat_history.append(ChatMessage(role="assistant", content=response_text))
+            st.session_state.chat_history.append(ChatMessage(role="assistant", content=response_text))
 
         else: # This handles GREETING and AYURVEDA_QUERY
             # --- CORE RESPONSE LOGIC ---
@@ -481,11 +480,11 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
                     response_generator = get_response_generator(prompt)
                     full_response = st.write_stream(response_generator)
 
-            # Manually add the full response to the chat history for context when using synthesis.
-            if st.session_state.user_doc_index is not None:
-                 st.session_state.chat_engine.chat_history.append(ChatMessage(role="assistant", content=full_response))
+            st.session_state.chat_engine.chat_history.append(
+                ChatMessage(role="assistant", content=full_response)
+            )
 
-    # CORRECTED: Update title on the first message, regardless of category.
+    # Update title on the first message, regardless of category.
     if is_first_message:
         update_session_title(prompt)
 
