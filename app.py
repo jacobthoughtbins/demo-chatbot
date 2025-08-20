@@ -480,9 +480,11 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
                     response_generator = get_response_generator(prompt)
                     full_response = st.write_stream(response_generator)
 
-            st.session_state.chat_engine.chat_history.append(
-                ChatMessage(role="assistant", content=full_response)
-            )
+
+            if st.session_state.user_doc_index is not None:
+                st.session_state.chat_engine.chat_history.append(
+                    ChatMessage(role="assistant", content=full_response)
+                )
 
     # Update title on the first message, regardless of category.
     if is_first_message:
