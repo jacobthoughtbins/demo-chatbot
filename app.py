@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import faiss
+import tiktoken # <-- Added for the tokenizer
 
 # --- LlamaIndex Core Imports ---
 from llama_index.core import (
@@ -14,7 +15,8 @@ from llama_index.core import (
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.llms.groq import Groq
-from llama_index.core.memory import ChatMemoryBuffer
+# *** CORRECTED IMPORT: Use ChatSummaryMemoryBuffer ***
+from llama_index.core.memory import ChatSummaryMemoryBuffer
 from llama_index.core.storage.chat_store import SimpleChatStore
 from llama_index.core.chat_engine import ContextChatEngine
 from llama_index.core.llms import ChatMessage
@@ -180,7 +182,6 @@ def load_models_and_index():
 
 def initialize_chat_engine(session_id: str):
     """Initialize the LlamaIndex chat engine with a robust system prompt."""
-    # *** NEW: Enhanced system prompt with a strong medical safety disclaimer ***
     system_prompt = """You are an expert Ayurvedic health assistant. Your knowledge is based on traditional Ayurvedic principles and the context provided.
 - Your primary function is to provide information about Ayurveda, health, wellness, and yoga.
 - Provide clear, helpful, and direct answers. Be friendly and conversational.
@@ -190,7 +191,17 @@ def initialize_chat_engine(session_id: str):
 - **MEDICAL SAFETY DISCLAIMER**: If a user uploads a prescription, asks you to validate a dosage, or asks for medical advice, you MUST state that you are an AI assistant and cannot provide medical advice. You can provide general information about herbs from your knowledge base, but you MUST ALWAYS end by strongly advising the user to consult with their qualified practitioner regarding their specific prescription or health condition.
 - To keep the conversation interactive, always conclude your response with a friendly, open-ended question.
 """
-    memory = ChatMemoryBuffer.from_defaults(token_limit=4000, chat_store=st.session_state.chat_store, chat_store_key=session_id)
+    # *** CORRECTED IMPLEMENTATION: Use a standard tokenizer encoding suitable for Llama models ***
+    # This removes the incorrect reference to "gpt-4" and uses a more generic, compatible tokenizer.
+    tokenizer_fn = tiktoken.get_encoding("cl100k_base").encode
+    memory = ChatSummaryMemoryBuffer.from_defaults(
+        llm=Settings.llm,
+        chat_store=st.session_state.chat_store,
+        chat_store_key=session_id,
+        token_limit=4000,
+        tokenizer_fn=tokenizer_fn,
+    )
+    
     base_retriever = st.session_state.index.as_retriever(similarity_top_k=2)
     if st.session_state.get("user_doc_index"):
         user_retriever = st.session_state.user_doc_index.as_retriever(similarity_top_k=3)
@@ -210,11 +221,9 @@ def update_session_title(first_message: str):
 def is_english(prompt: str) -> bool:
     return not bool(re.search(r'[\u0900-\u097F\u4E00-\u9FFF\uAC00-\uD7AF\u0400-\u04FF]', prompt))
 
-# *** NEW: Function to check if a document is relevant to Ayurveda ***
 def is_document_relevant(docs: list[Document]) -> bool:
     """Uses the LLM to classify if the document content is relevant."""
-    sample_text = " ".join(doc.get_content() for doc in docs)[:2000] # Get a substantial sample
-    
+    sample_text = " ".join(doc.get_content() for doc in docs)[:2000]
     classification_prompt = f"""
     The following text is from a document uploaded by a user.
     Is this text primarily about Ayurveda, wellness, yoga, natural health, or herbal medicine?
@@ -230,8 +239,6 @@ def is_document_relevant(docs: list[Document]) -> bool:
     return "YES" in response.text.upper()
 
 def classify_prompt(prompt: str) -> str:
-    """Classifies the user's prompt into predefined categories."""
-    # (Existing classification logic remains the same)
     greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "howdy"]
     if prompt.strip().lower() in greetings:
         return "GREETING"
@@ -319,10 +326,9 @@ if uploaded_files:
                     st.error(f"Error reading file {uploaded_file.name}: {e}")
             
             if all_docs:
-                # *** NEW: Check document relevance before indexing ***
                 if is_document_relevant(all_docs):
                     st.success("Document is relevant. Indexing content...")
-                    d = 384 # Embedding model dimension
+                    d = 384
                     faiss_index = faiss.IndexFlatL2(d)
                     vector_store = FaissVectorStore(faiss_index=faiss_index)
                     storage_context = StorageContext.from_defaults(vector_store=vector_store)
@@ -332,7 +338,7 @@ if uploaded_files:
                     st.success(f"Successfully analyzed: **{', '.join(new_file_names)}**.")
                 else:
                     st.error("The uploaded document does not seem to be related to Ayurveda or wellness. Please upload a relevant document.")
-                    st.session_state.user_doc_index = None # Ensure no index is used
+                    st.session_state.user_doc_index = None
                     st.session_state.processed_file_names = []
 
             for path in file_paths:
