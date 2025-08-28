@@ -6,7 +6,9 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import faiss
-import tiktoken # <-- Added for the tokenizer
+import tiktoken
+import base64
+from groq import Groq as GroqAPI
 
 # --- LlamaIndex Core Imports ---
 from llama_index.core import (
@@ -15,13 +17,17 @@ from llama_index.core import (
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.llms.groq import Groq
-# *** CORRECTED IMPORT: Use ChatSummaryMemoryBuffer ***
 from llama_index.core.memory import ChatSummaryMemoryBuffer
 from llama_index.core.storage.chat_store import SimpleChatStore
 from llama_index.core.chat_engine import ContextChatEngine
 from llama_index.core.llms import ChatMessage
-from llama_index.core.schema import NodeWithScore
+from llama_index.core.schema import NodeWithScore, ImageDocument
 from llama_index.core.retrievers import RecursiveRetriever
+
+# --- PIL for Image handling ---
+from PIL import Image
+import requests
+from io import BytesIO
 
 # --- Page Configuration & CSS ---
 st.set_page_config(
@@ -136,10 +142,28 @@ def save_chat_sessions():
     with open("chat_sessions.json", "w") as f:
         json.dump(st.session_state.chat_sessions, f, indent=2)
 
-def create_new_session():
-    session_id = str(uuid.uuid4())
+def clear_session_specific_state():
+    """Clears states that should not persist across sessions."""
     st.session_state.user_doc_index = None
     st.session_state.processed_file_names = []
+    
+    # Clear all image-related states
+    image_path_to_remove = st.session_state.get("processed_image_path")
+    if image_path_to_remove and os.path.exists(image_path_to_remove):
+        try:
+            os.remove(image_path_to_remove)
+        except OSError as e:
+            st.warning(f"Could not remove temp file: {e}")
+
+    st.session_state.processed_image_name = None 
+    st.session_state.image_analysis_result = None
+    st.session_state.processed_image_path = None
+
+
+def create_new_session():
+    """Creates a new chat session and clears previous session-specific data."""
+    clear_session_specific_state() 
+    session_id = str(uuid.uuid4())
     return {"id": session_id, "title": "New Chat", "created_at": datetime.now().isoformat()}
 
 def delete_session(session_id_to_delete):
@@ -165,11 +189,13 @@ def delete_session(session_id_to_delete):
 def load_models_and_index():
     """Load embedding model, LLM, and the base FAISS vector index."""
     Settings.embed_model = FastEmbedEmbedding(model_name="BAAI/bge-small-en-v1.5", cache_dir="./embedding_cache")
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
+    
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
         st.error("GROQ_API_KEY not found. Please set it in your .env file.")
         st.stop()
-    Settings.llm = Groq(model="llama-3.1-8b-instant", api_key=api_key)
+    Settings.llm = Groq(model="llama-3.1-8b-instant", api_key=groq_api_key)
+
     if not os.path.exists("faiss_db"):
         st.error("FAISS database not found. Please ensure the base index has been created.")
         st.stop()
@@ -177,6 +203,57 @@ def load_models_and_index():
     storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir="faiss_db")
     index = load_index_from_storage(storage_context=storage_context, index_id="2a3e044a-5744-41d0-9873-8d679b1571a8")
     return index
+
+# --- Image Understanding Function ---
+def analyze_image_on_upload(image_path: str):
+    """
+    Analyzes an image using Groq's model and stores the result in session_state.
+    """
+    try:
+        st.session_state.image_analysis_result = None
+
+        def encode_image(image_path):
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+
+        base64_image = encode_image(image_path)
+        
+        client = GroqAPI(api_key=os.environ.get("GROQ_API_KEY"))
+
+        prompt = """Analyze the provided image.
+- If it looks like a prescription, extract patient name, doctor, date, and each medicine with dosage and frequency.
+- If it shows a body area, describe visible signs objectively (color/texture/location). Do not diagnose.
+- Summarize clearly in bullet points."""
+
+        with st.spinner("🔬 Analyzing the image..."):
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                },
+                            },
+                        ],
+                    }
+                ],
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+            )
+            result_text = chat_completion.choices[0].message.content
+
+        st.session_state.image_analysis_result = result_text
+        st.success("Image analysis complete.")
+
+    except Exception as e:
+        st.error(f"Error during image analysis: {e}")
+        st.session_state.image_analysis_result = None
+        import traceback
+        traceback.print_exc()
+
 
 # --- Backend Logic: Chat Engine and Response Generation ---
 
@@ -188,11 +265,9 @@ def initialize_chat_engine(session_id: str):
 - **IMPORTANT**: Structure your answers clearly using markdown. Use headings and bullet points.
 - **CRITICAL**: If a user asks for a cure for a serious disease like cancer, you must state: "Ayurveda can be a supportive therapy for managing symptoms and improving quality of life, but it is not a cure for diseases like cancer. It is essential to consult with a qualified medical doctor for diagnosis and treatment."
 - If a question is outside the scope of Ayurveda, health, or the provided documents, politely state: "I am an Ayurvedic health assistant and my knowledge is focused on that area. I can't answer questions on topics like politics, celebrities, or general trivia."
-- **MEDICAL SAFETY DISCLAIMER**: If a user uploads a prescription, asks you to validate a dosage, or asks for medical advice, you MUST state that you are an AI assistant and cannot provide medical advice. You can provide general information about herbs from your knowledge base, but you MUST ALWAYS end by strongly advising the user to consult with their qualified practitioner regarding their specific prescription or health condition.
+- **MEDICAL SAFETY DISCLAIMER**: If a user uploads a prescription, asks you to validate a dosage, or asks for medical advice based on an image or text, you MUST state that you are an AI assistant and cannot provide medical advice. You can provide general information about herbs from your knowledge base, but you MUST ALWAYS end by strongly advising the user to consult with their qualified practitioner or doctor regarding their specific prescription or health condition.
 - To keep the conversation interactive, always conclude your response with a friendly, open-ended question.
 """
-    # *** CORRECTED IMPLEMENTATION: Use a standard tokenizer encoding suitable for Llama models ***
-    # This removes the incorrect reference to "gpt-4" and uses a more generic, compatible tokenizer.
     tokenizer_fn = tiktoken.get_encoding("cl100k_base").encode
     memory = ChatSummaryMemoryBuffer.from_defaults(
         llm=Settings.llm,
@@ -260,11 +335,16 @@ def classify_prompt(prompt: str) -> str:
     return "OFF_TOPIC"
 
 # --- Streamlit App Initialization ---
-if "index" not in st.session_state: st.session_state.index = load_models_and_index()
+if "index" not in st.session_state: 
+    st.session_state.index = load_models_and_index()
 if "chat_store" not in st.session_state: st.session_state.chat_store = load_chat_store()
 if "chat_sessions" not in st.session_state: st.session_state.chat_sessions = load_chat_sessions()
 if "user_doc_index" not in st.session_state: st.session_state.user_doc_index = None
 if "processed_file_names" not in st.session_state: st.session_state.processed_file_names = []
+if "processed_image_name" not in st.session_state: st.session_state.processed_image_name = None
+if "processed_image_path" not in st.session_state: st.session_state.processed_image_path = None
+if "image_analysis_result" not in st.session_state: st.session_state.image_analysis_result = None
+if "uploader_key_counter" not in st.session_state: st.session_state.uploader_key_counter = 0
 if "current_session_id" not in st.session_state:
     if st.session_state.chat_sessions:
         st.session_state.current_session_id = max(st.session_state.chat_sessions.values(), key=lambda s: s['created_at'])['id']
@@ -293,10 +373,10 @@ with st.sidebar:
         col1, col2 = st.columns([5, 1])
         with col1:
             if st.button(session["title"], key=f"session_{session['id']}", use_container_width=True):
-                st.session_state.current_session_id = session['id']
-                st.session_state.user_doc_index = None
-                st.session_state.processed_file_names = []
-                st.rerun()
+                if st.session_state.current_session_id != session['id']:
+                    st.session_state.current_session_id = session['id']
+                    clear_session_specific_state() 
+                    st.rerun()
         with col2:
             if st.button("🗑️", key=f"delete_{session['id']}", use_container_width=True):
                 delete_session(session['id'])
@@ -344,9 +424,55 @@ if uploaded_files:
             for path in file_paths:
                 if os.path.exists(path): os.remove(path)
 
+# --- UI Rendering: Image Uploader ---
+# FIX: Create a dynamic key for the uploader to allow resetting it.
+uploader_key = f"image_uploader_{st.session_state.current_session_id}_{st.session_state.uploader_key_counter}"
+uploaded_image = st.file_uploader(
+    "Upload an image of a health concern or prescription", 
+    type=['png', 'jpg', 'jpeg'], 
+    key=uploader_key
+)
+
+if uploaded_image:
+    if uploaded_image.name != st.session_state.get("processed_image_name"):
+        try:
+            img_path = os.path.join("temp_uploads", uploaded_image.name)
+            with open(img_path, "wb") as f:
+                f.write(uploaded_image.getbuffer())
+            
+            st.session_state.processed_image_name = uploaded_image.name
+            st.session_state.processed_image_path = img_path
+            
+            analyze_image_on_upload(img_path)
+
+        except Exception as e:
+            st.error(f"Error processing image: {e}")
+
+# --- Display the uploaded image, a remove button, and the analysis in an expander ---
+if st.session_state.get("processed_image_path"):
+    st.markdown("---")
+    col1, col2 = st.columns([0.8, 0.2])
+    with col1:
+        st.image(st.session_state.processed_image_path, caption="Current Image", width=300)
+    with col2:
+        # FIX: Increment the uploader key counter on button press to reset the widget
+        if st.button("Remove Image ❌", key="remove_image"):
+            clear_session_specific_state()
+            st.session_state.uploader_key_counter += 1
+            st.rerun()
+    
+    if st.session_state.get("image_analysis_result"):
+        with st.expander("See Image Analysis Details"):
+            st.info(st.session_state.image_analysis_result)
+    st.markdown("---")
+
+
 # --- Main Application Logic: Chat Input and Response ---
 if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
-    with st.chat_message("user"): st.markdown(prompt)
+    
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
     try:
         is_first_message = not st.session_state.chat_store.get_messages(st.session_state.current_session_id)
     except KeyError:
@@ -371,7 +497,12 @@ if prompt := st.chat_input("Ask about Ayurvedic wellness..."):
         else:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
-                    streaming_response = st.session_state.chat_engine.stream_chat(prompt)
+                    final_prompt = prompt
+                    if st.session_state.get("image_analysis_result"):
+                        image_analysis = st.session_state.image_analysis_result
+                        final_prompt = f"Based on the following image analysis, answer the user's question.\n\n**Image Analysis:**\n{image_analysis}\n\n**User's Question:**\n{prompt}"
+                        
+                    streaming_response = st.session_state.chat_engine.stream_chat(final_prompt)
                     full_response = st.write_stream(streaming_response.response_gen)
     
     if is_first_message: update_session_title(prompt)
